@@ -4,13 +4,13 @@
   "description": "Outgoing-only plugin that sends XRP settlements.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "DEBUG=ilp* node ./test/test.js"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
     "ilp-packet": "^2.1.2",
-    "ilp-plugin-mini-accounts": "^3.0.0",
+    "ilp-plugin-mini-accounts": "https://github.com/interledgerjs/ilp-plugin-mini-accounts.git#bs-derive-multi-plugin",
     "ripple-lib": "^0.17.9"
   }
 }

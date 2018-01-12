@@ -1,4 +1,4 @@
-const PluginOutgoingSettle = require('.')
+const PluginOutgoingSettle = require('..')
 const PluginBtp = require('ilp-plugin-btp')
 const crypto = require('crypto')
 const IlpPacket = require('ilp-packet')
