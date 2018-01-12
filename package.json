@@ -1,5 +1,5 @@
 {
-  "name": "@sharafian/ilp-plugin-outgoing-settle",
+  "name": "ilp-plugin-outgoing-settle",
   "version": "1.0.0",
   "description": "Outgoing-only plugin that sends XRP settlements.",
   "main": "index.js",
