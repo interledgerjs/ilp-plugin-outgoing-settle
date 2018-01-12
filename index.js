@@ -49,16 +49,20 @@ class PluginOutgoingSettle {
     const account = this._getAccount(from)
     await account.connect()
 
-    // TODO: get an XRP address from the auth packet
+    // TODO: alternatively could try to put the XRP address in
+    // the websocket connection path. only problem is that there could
+    // be issues if an account has several connections. currently
+    // this code assumes there must be some separate API or admin process
+    // that modifies the store and manually will add the XRP address
+
+    if (!account.getXrpAddress()) {
+      throw new Error('account must have a registered XRP address to connect')
+    }
   }
 
-  async _disconnect () {
-    // TODO?
-  }
-
-  async _sendPrepare (destination, prepare) {
-    // TODO?
-  }
+  // These handlers are not currently needed
+  // async _disconnect () { }
+  // async _sendPrepare (destination, prepare) { }
 
   async _handlePrepareResponse (destination, response, prepare) {
     if (response.type === IlpPacket.Type.TYPE_ILP_FULFILL) {
@@ -94,7 +98,8 @@ class PluginOutgoingSettle {
   }
 
   async _handleCustomData (from, btpPacket) {
-    // Bounce everything to prevent sending from client
+    // Bounce everything to prevent sending from client. The mini-accounts
+    // class will do the job of handling ILDCP first.
     // TODO: should anything ever be let through?
     throw new Error(`your account is receive only. please connect to a
       different system to send. from=${from} packet=${btpPacket}`)

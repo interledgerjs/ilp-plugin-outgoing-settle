@@ -1,4 +1,5 @@
 const BALANCE = a => a + ':balance'
+const XRP_ADDRESS = a => a + ':xrp_address'
 const BigNumber = require('bignumber.js')
 
 class Account {
@@ -12,6 +13,7 @@ class Account {
 
   async connect () {
     await this._store.load(BALANCE(this._account))
+    await this._store.load(XRP_ADDRESS(this._account))
   }
 
   getAccount () {
@@ -27,7 +29,7 @@ class Account {
   }
 
   getXrpAddress () {
-    throw new Error('TODO')
+    return this._store.get(XRP_ADDRESS(this._account))
   }
 }
 

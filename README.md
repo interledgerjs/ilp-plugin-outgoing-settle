@@ -30,3 +30,11 @@ const plugin = new IlpPluginOutgoingSettle({
   _store: new Store() // passed in by connector automatically
 })
 ```
+
+The `_store` in this case needs to have been modified from outside for this
+plugin to work. For any `<account>` that connects, there must be a store entry
+at `<account>:xrp_address` containing its XRP address.
+
+_TODO: Should the client put the XRP address into the path they're connecting
+to instead? It would cause strange behavior when the user has several
+connections, but that functionality is going to be removed anyways._
