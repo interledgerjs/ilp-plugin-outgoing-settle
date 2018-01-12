@@ -83,6 +83,8 @@ class PluginOutgoingSettle {
       account.setBalance(balance.toString())
 
       if (balance.greaterThan(this._settleThreshold)) {
+        // careful that this balance operation persists, because otherwise it
+        // could trigger a double-settlement which is potentially dangerous
         account.setBalance('0')
         // don't await, because we don't want the fulfill call to take a long
         // time and potentially drop the fulfillment while passing back.
