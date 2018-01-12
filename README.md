@@ -31,10 +31,13 @@ const plugin = new IlpPluginOutgoingSettle({
 })
 ```
 
-The `_store` in this case needs to have been modified from outside for this
-plugin to work. For any `<account>` that connects, there must be a store entry
-at `<account>:xrp_address` containing its XRP address.
+Clients connecting to this plugin should connect with a server url of:
 
-_TODO: Should the client put the XRP address into the path they're connecting
-to instead? It would cause strange behavior when the user has several
-connections, but that functionality is going to be removed anyways._
+```
+"btp+ws://:<token>@localhost:8080/<ripple_address>"
+```
+
+The `<ripple_address>` in the URL determines where settlements are sent.  Once
+you have authenticated with a `<token>` and a `<ripple_address>`, you cannot
+supply any other `<ripple_address>` when connecting to that account. This is to
+prevent funds from being diverted if anyone should find out your `<token>`.

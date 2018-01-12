@@ -28,6 +28,10 @@ class Account {
     this._store.set(BALANCE(this._account), balance)
   }
 
+  setXrpAddress (address) {
+    this._store.set(XRP_ADDRESS(this._account), address)
+  }
+
   getXrpAddress () {
     return this._store.get(XRP_ADDRESS(this._account))
   }

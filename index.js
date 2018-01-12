@@ -1,11 +1,13 @@
 const { RippleAPI } = require('ripple-lib')
+const debug = require('debug')('ilp-plugin-outgoing-settle')
 const PluginMiniAccounts = require('ilp-plugin-mini-accounts')
 const Account = require('./src/account')
 const StoreWrapper = require('./src/store-wrapper') // TODO: module-ize this
 const DEFAULT_SETTLE_THRESHOLD = 25 * Math.pow(10, 6) // 25 XRP
 const { util } = require('ilp-plugin-xrp-paychan-shared')
+const addressCodec = require('ripple-address-codec')
 
-class PluginOutgoingSettle {
+class PluginOutgoingSettle extends PluginMiniAccounts {
   constructor (opts) {
     super(opts)
 
@@ -22,7 +24,7 @@ class PluginOutgoingSettle {
   }
 
   _getAccount (from) {
-    const accountName = this.ilpAddressToAccount(this._prefix, from)
+    const accountName = this.ilpAddressToAccount(from)
     let account = this._accounts.get(accountName)
 
     if (!account) {
@@ -45,19 +47,30 @@ class PluginOutgoingSettle {
     this._api.connection.on('transaction', this._handleTransaction.bind(this))
   }
 
-  async _connect (from, authPacket) {
+  async _connect (from, authPacket, { ws, req }) {
     const account = this._getAccount(from)
     await account.connect()
 
-    // TODO: alternatively could try to put the XRP address in
-    // the websocket connection path. only problem is that there could
-    // be issues if an account has several connections. currently
-    // this code assumes there must be some separate API or admin process
-    // that modifies the store and manually will add the XRP address
+    // Once an XRP address is associated with an account, it must not change.
+    // This is to prevent anyone from stealing funds if an account is
+    // compromised.
 
-    if (!account.getXrpAddress()) {
-      throw new Error('account must have a registered XRP address to connect')
+    const addressInPath = req.url.substring(1)
+    const existingAddress = account.getXrpAddress()
+
+    if (!addressCodec.isValidAddress(addressInPath)) {
+      throw new Error('invalid XRP address in path. path="' + req.url + '"')
+    } else if (existingAddress && existingAddress !== addressInPath) {
+      throw new Error(`XRP address is path does not match stored address.
+        path="${req.url}"
+        stored="${existingAddress}"`)
+    } else {
+      debug('setting xrp address. address=' + addressInPath)
+      account.setXrpAddress(addressInPath)
     }
+
+    debug('got xrp address. address=' + account.getXrpAddress(),
+      'account=' + account.getAccount())
   }
 
   // These handlers are not currently needed
