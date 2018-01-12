@@ -1,11 +1,13 @@
 const { RippleAPI } = require('ripple-lib')
+const IlpPacket = require('ilp-packet')
+const crypto = require('crypto')
 const debug = require('debug')('ilp-plugin-outgoing-settle')
 const PluginMiniAccounts = require('ilp-plugin-mini-accounts')
 const Account = require('./src/account')
 const StoreWrapper = require('./src/store-wrapper') // TODO: module-ize this
 const DEFAULT_SETTLE_THRESHOLD = 25 * Math.pow(10, 6) // 25 XRP
-const { util } = require('ilp-plugin-xrp-paychan-shared')
 const addressCodec = require('ripple-address-codec')
+const dropsToXrp = d => d.div(Math.pow(10, 6)).toString()
 
 class PluginOutgoingSettle extends PluginMiniAccounts {
   constructor (opts) {
@@ -61,9 +63,7 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
     if (!addressCodec.isValidAddress(addressInPath)) {
       throw new Error('invalid XRP address in path. path="' + req.url + '"')
     } else if (existingAddress && existingAddress !== addressInPath) {
-      throw new Error(`XRP address is path does not match stored address.
-        path="${req.url}"
-        stored="${existingAddress}"`)
+      throw new Error(`XRP address is path does not match stored address. path="${req.url}" stored="${existingAddress}"`)
     } else {
       debug('setting xrp address. address=' + addressInPath)
       account.setXrpAddress(addressInPath)
@@ -87,10 +87,7 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
         .digest()
 
       if (!hashedFulfillment.equals(condition)) {
-        throw new Error(`invalid fulfillment.
-          condition=${condition.toString('base64')}
-          fulfillment=${fulfillment.toString('base64')}
-          hashedFulfillment=${hashedFulfillment.toString('base64')}`)
+        throw new Error(`invalid fulfillment. condition=${condition.toString('base64')} fulfillment=${fulfillment.toString('base64')} hashedFulfillment=${hashedFulfillment.toString('base64')}`)
       }
 
       // TODO: is it possible that this account is unloaded?
@@ -98,6 +95,8 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
       const oldBalance = account.getBalance()
       const balance = oldBalance.add(prepare.data.amount)
       account.setBalance(balance.toString())
+
+      debug(`updated balance. old=${oldBalance.toString()} new=${balance.toString()} account=${account.getAccount()}`)
 
       if (balance.greaterThan(this._settleThreshold)) {
         // careful that this balance operation persists, because otherwise it
@@ -114,16 +113,15 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
     // Bounce everything to prevent sending from client. The mini-accounts
     // class will do the job of handling ILDCP first.
     // TODO: should anything ever be let through?
-    throw new Error(`your account is receive only. please connect to a
-      different system to send. from=${from} packet=${btpPacket}`)
+    throw new Error(`your account is receive only. please connect to a different system to send. from=${from} packet=${btpPacket}`)
   }
 
   async _settle (account, balance) {
     debug('sending settlement. account=', account.getAccount(),
       'balance=', balance.toString())
 
-    const value = util.dropsToXrp(balance.toString())
-    const tx = await this._api.preparePayment(account.getXrpAddress(), {
+    const value = dropsToXrp(balance)
+    const tx = await this._api.preparePayment(this._address, {
       source: {
         address: this._address,
         maxAmount: {
@@ -150,7 +148,9 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
     debug('submitting settlement tx. account=', account.getAccount())
     await this._api.submit(signed.signedTransaction)
 
-    return result
+    await result
+    debug('successfully settled . account=', account.getAccount(),
+      'balance=', balance.toString())
   }
 
   // from https://github.com/ripple/ilp-plugin-xrp-escrow/blob/master/src/plugin.js#L414

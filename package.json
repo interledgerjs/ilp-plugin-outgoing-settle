@@ -9,8 +9,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "ilp-packet": "^2.1.2",
     "ilp-plugin-mini-accounts": "^3.0.0",
-    "ilp-plugin-xrp-paychan-shared": "github:interledgerjs/ilp-plugin-xrp-paychan-shared",
     "ripple-lib": "^0.17.9"
   }
 }
