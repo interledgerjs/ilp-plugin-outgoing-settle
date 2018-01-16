@@ -12,12 +12,15 @@ class Store {
 
 const server = new PluginOutgoingSettle({
   port: 8088,
+  spspPort: 8089,
   xrpServer: 'wss://s.altnet.rippletest.net:51233',
   secret: 'shmKxWVcvBDJwgCdxJUd2gb4tpwVc',
   address: 'rHQfnr3rS7EC7P9YdYm7zcMXtk9u48TCyB',
   _store: new Store(),
   debugHostIldcpInfo: {
-    clientAddress: 'test.settle'
+    clientAddress: 'test.settle',
+    assetCode: 'XRP',
+    assetScale: 6
   }
 })
 
@@ -44,9 +47,9 @@ async function run () {
   })
 
   for (let i = 0; i < 6; ++i) {
-    console.log('sending 5 xrp')
+    console.log('sending 5000 xrp drops')
     await server.sendData(IlpPacket.serializeIlpPrepare({
-      amount: String(5 * Math.pow(10, 6)),
+      amount: String(5 * Math.pow(10, 3)),
       destination: 'test.settle.K7gNU3sdo-OL0wNhqoVWhr3g6s1xYv72ol_pe_Unols',
       executionCondition: condition,
       expiresAt: new Date(Date.now() + 10000),
@@ -57,7 +60,7 @@ async function run () {
   }
 
   console.log('settling')
-  await new Promise(resolve => setTimeout(resolve, 5000))
+  await new Promise(resolve => setTimeout(resolve, 65000))
   console.log('done')
 }
 
