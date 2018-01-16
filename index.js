@@ -5,10 +5,15 @@ const debug = require('debug')('ilp-plugin-outgoing-settle')
 const PluginMiniAccounts = require('ilp-plugin-mini-accounts')
 const Account = require('./src/account')
 const StoreWrapper = require('./src/store-wrapper') // TODO: module-ize this
+const ReversePlugin = require('./src/reverse-plugin')
 const DEFAULT_SETTLE_THRESHOLD = 1000
 const FUNDING_AMOUNT = 25 * Math.pow(10, 6)
 const addressCodec = require('ripple-address-codec')
 const dropsToXrp = d => d.div(Math.pow(10, 6)).toString()
+
+const Koa = require('koa')
+const Router = require('koa-router')
+const PSK2 = require('ilp-protocol-psk2')
 
 class PluginOutgoingSettle extends PluginMiniAccounts {
   constructor (opts) {
@@ -26,6 +31,11 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
 
     this._submitted = {}
     this._pendingSettlements = new Map()
+
+    this._spspPlugin = new ReversePlugin(this)
+    this._spspServer = new Koa()
+    this._spspRouter = Router()
+    this._spspPort = opts.spspPort || 80
   }
 
   _getAccount (from) {
@@ -51,6 +61,30 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
       accounts: [ this._address ]
     })
     this._api.connection.on('transaction', this._handleTransaction.bind(this))
+
+    await this._spspPlugin.connect()
+    this._spspReceiver = await PSK2.createReceiver({
+      plugin: this._spspPlugin,
+      paymentHandler: params => params.accept()
+    })
+    this._spspRouter.get('/', async ctx => {
+      const details = this._spspReceiver.generateAddressAndSecret()
+      ctx.body = {
+        destination_account: details.destinationAccount,
+        shared_secret: details.sharedSecret.toString('base64'),
+        ledger_info: {
+          asset_code: 'XRP',  
+          asset_scale: 6
+        },
+        receiver_info: {
+          name: 'Siren Automatic XRP Receiver'
+        }
+      }
+    })
+    this._spspServer
+      .use(this._spspRouter.routes())
+      .use(this._spspRouter.allowedRoutes())
+      .listen(this._spspPort)
   }
 
   async _connect (from, authPacket, { ws, req }) {
@@ -94,8 +128,28 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
         throw new Error(`invalid fulfillment. condition=${condition.toString('base64')} fulfillment=${fulfillment.toString('base64')} hashedFulfillment=${hashedFulfillment.toString('base64')}`)
       }
 
+      let account
+      if (destination.startsWith(this._prefix + 'spsp.')) {
+        const address = destination
+          .substring((this._prefix + 'spsp.').length)
+          .split('.')[0]
+
+        if (addressCodec.isValidAddress(address)) {
+          throw new Error('invalid destination. destination=' + destination +
+            ' parsed_address=' + address)
+        }
+
+        account = new Account({
+          address,
+          store: this._store
+        })
+
+        await account.connect()
+      } else {
+        account = this._getAccount(destination)
+      }
+
       // TODO: is it possible that this account is unloaded?
-      const account = this._getAccount(destination)
       const oldBalance = account.getBalance()
       const balance = oldBalance.add(prepare.data.amount)
       account.setBalance(balance.toString())
@@ -198,6 +252,34 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
         this._submitted[ev.transaction.hash].resolve(null)
       }
     }
+  }
+
+  async _handleOutgoingBtpPacket (to, btpPacket) {
+    if (!to.startsWith(this._prefix)) {
+      throw new Error(`invalid destination, must start with prefix. destination=${to} prefix=${this._prefix}`)
+    }
+
+    if (to.startsWith(this._prefix + 'spsp.')) {
+      return this._spspPlugin._handleOutgoingBtpPacket(to, btpPacket)
+    }
+
+    const account = this.ilpAddressToAccount(to)
+    const connections = this._connections.get(account)
+
+    if (!connections) {
+      throw new Error('No clients connected for account ' + account)
+    }
+
+    const results = Array.from(connections).map(wsIncoming => {
+      const result = new Promise(resolve => wsIncoming.send(BtpPacket.serialize(btpPacket), resolve))
+
+      result.catch(err => {
+        const errorInfo = (typeof err === 'object' && err.stack) ? err.stack : String(err)
+        debug('unable to send btp message to client: ' + errorInfo, 'btp packet:', JSON.stringify(btpPacket))
+      })
+    })
+
+    return null
   }
 }
 
