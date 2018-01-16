@@ -5,10 +5,12 @@ const BigNumber = require('bignumber.js')
 class Account {
   constructor ({
     account,
-    store
+    store,
+    api
   }) {
     this._account = account
     this._store = store
+    this._api = api
   }
 
   async connect () {
@@ -28,12 +30,26 @@ class Account {
     this._store.set(BALANCE(this._account), balance)
   }
 
-  setXrpAddress (address) {
+  async setXrpAddress (address) {
     this._store.set(XRP_ADDRESS(this._account), address)
+
+    this._addressExists = false
+    try {
+      await this._api.getAccountInfo(account.getXrpAddress())
+      this._addressExists = true
+    } catch (e) {}
   }
 
   getXrpAddress () {
     return this._store.get(XRP_ADDRESS(this._account))
+  }
+
+  addressExists () {
+    return this._addressExists
+  }
+
+  setAddressExists (exists) {
+    this._addressExists = exists
   }
 }
 
