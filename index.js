@@ -70,11 +70,11 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
       plugin: this._spspPlugin,
       paymentHandler: params => params.accept()
     })
-    this._spspRouter.get('/', async ctx => {
+    this._spspRouter.get(['/', '/:address'], async ctx => {
       const details = this._spspReceiver.generateAddressAndSecret()
-      const address = addressCodec
+      const address = ctx.params.address || addressCodec
         .encode(Buffer.from(
-          base32.decode(ctx.get('host').split('.')[1]),
+          base32.decode(ctx.get('host').split('.')[0]),
           'binary'))
 
       const replacedDestination = details
