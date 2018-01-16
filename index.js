@@ -5,7 +5,8 @@ const debug = require('debug')('ilp-plugin-outgoing-settle')
 const PluginMiniAccounts = require('ilp-plugin-mini-accounts')
 const Account = require('./src/account')
 const StoreWrapper = require('./src/store-wrapper') // TODO: module-ize this
-const DEFAULT_SETTLE_THRESHOLD = 25 * Math.pow(10, 6) // 25 XRP
+const DEFAULT_SETTLE_THRESHOLD = 1000
+const FUNDING_AMOUNT = 25 * Math.pow(10, 6)
 const addressCodec = require('ripple-address-codec')
 const dropsToXrp = d => d.div(Math.pow(10, 6)).toString()
 
@@ -19,10 +20,12 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
     this._api = new RippleAPI({ server: this._xrpServer })
 
     this._settleThreshold = opts.settleThreshold || DEFAULT_SETTLE_THRESHOLD
+    this._settleDelay = 60 * 1000
     this._store = new StoreWrapper(opts._store)
     this._accounts = new Map()
 
     this._submitted = {}
+    this._pendingSettlements = new Map()
   }
 
   _getAccount (from) {
@@ -33,6 +36,7 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
       account = new Account({ 
         account: accountName,
         store: this._store,
+        api: this._api
       })
       this._accounts.set(accountName, account)
     }
@@ -66,7 +70,7 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
       throw new Error(`XRP address is path does not match stored address. path="${req.url}" stored="${existingAddress}"`)
     } else {
       debug('setting xrp address. address=' + addressInPath)
-      account.setXrpAddress(addressInPath)
+      await account.setXrpAddress(addressInPath)
     }
 
     debug('got xrp address. address=' + account.getXrpAddress(),
@@ -98,13 +102,41 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
 
       debug(`updated balance. old=${oldBalance.toString()} new=${balance.toString()} account=${account.getAccount()}`)
 
-      if (balance.greaterThan(this._settleThreshold)) {
+      const threshold = account.addressExists()
+        ? this._settleThreshold
+        : BigNumber.min(this._settleThreshold, FUNDING_AMOUNT)
+
+      if (balance.greaterThan(threshold)) {
         // careful that this balance operation persists, because otherwise it
         // could trigger a double-settlement which is potentially dangerous
         account.setBalance('0')
+        const pending = this._pendingSettlements.get(account.getXrpAddress())
+        const settleAmount = pending
+          ? balance.add(pending.settleAmount)
+          : balance
+
+        // clear the settlement timer
+        if (pending) {
+          clearTimeout(pending)
+          this._pendingSettlements.delete(account.getXrpAddress())
+        }
+
+        const settleCallback = () => this._settle(account, settleAmount)
+          .catch(e => debug('error during settlemnt.',
+            'account=' + account.getAccount(),
+            'error=', e))
+
         // don't await, because we don't want the fulfill call to take a long
         // time and potentially drop the fulfillment while passing back.
-        this._settle(account, balance)
+        if (settleAmount.gt(FUNDING_AMOUNT)) {
+          settleCallback() 
+        } else {
+          // delay on small amounts so we don't repeat settlements
+          this._pendingSettlements.set(account.getXrpAddress(), {
+            settleAmount: balance,
+            timeout: setTimeout(settleCallback, this._settleDelay)
+          })
+        }
       }
     }
   }
