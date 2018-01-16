@@ -58,7 +58,7 @@ class Account {
   }
 
   getXrpAddress () {
-    return this._store.get(XRP_ADDRESS(this._account))
+    return this._store.get(XRP_ADDRESS(this._account)) || this._address
   }
 
   addressExists () {
