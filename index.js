@@ -1,4 +1,6 @@
 const { RippleAPI } = require('ripple-lib')
+const BigNumber = require('bignumber.js')
+const BtpPacket = require('btp-packet')
 const IlpPacket = require('ilp-packet')
 const crypto = require('crypto')
 const debug = require('debug')('ilp-plugin-outgoing-settle')
@@ -83,7 +85,7 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
     })
     this._spspServer
       .use(this._spspRouter.routes())
-      .use(this._spspRouter.allowedRoutes())
+      .use(this._spspRouter.allowedMethods())
       .listen(this._spspPort)
   }
 
@@ -154,7 +156,7 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
       const balance = oldBalance.add(prepare.data.amount)
       account.setBalance(balance.toString())
 
-      debug(`updated balance. old=${oldBalance.toString()} new=${balance.toString()} account=${account.getAccount()}`)
+      debug(`updated balance. old=${oldBalance.toString()} new=${balance.toString()} address=${account.getXrpAddress()}`)
 
       const threshold = account.addressExists()
         ? this._settleThreshold
@@ -169,9 +171,12 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
           ? balance.add(pending.settleAmount)
           : balance
 
+        debug('setting settleAmount. settleAmount=' + settleAmount.toString(),
+          'balance=0 oldBalance=' + balance.toString())
+
         // clear the settlement timer
         if (pending) {
-          clearTimeout(pending)
+          clearTimeout(pending.timeout)
           this._pendingSettlements.delete(account.getXrpAddress())
         }
 
@@ -183,11 +188,13 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
         // don't await, because we don't want the fulfill call to take a long
         // time and potentially drop the fulfillment while passing back.
         if (settleAmount.gt(FUNDING_AMOUNT)) {
+          debug('settling immediately')
           settleCallback() 
         } else {
           // delay on small amounts so we don't repeat settlements
+          debug('settling after timeout. timeout=' + this._settleDelay)
           this._pendingSettlements.set(account.getXrpAddress(), {
-            settleAmount: balance,
+            settleAmount,
             timeout: setTimeout(settleCallback, this._settleDelay)
           })
         }

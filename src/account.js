@@ -6,7 +6,7 @@ const BigNumber = require('bignumber.js')
 class Account {
   constructor ({
     account,
-    address
+    address,
     store,
     api
   }) {
@@ -30,7 +30,7 @@ class Account {
     await this._store.load(this._balanceKey)
 
     this._addressExists = this._store.get(EXISTS(address))
-    if (exists === undefined) {
+    if (this._addressExists === undefined) {
       this._addressExists = false
       try {
         await this._api.getAccountInfo(account.getXrpAddress())
