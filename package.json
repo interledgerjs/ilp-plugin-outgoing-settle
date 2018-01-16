@@ -15,5 +15,8 @@
     "koa": "^2.4.1",
     "koa-router": "^7.3.0",
     "ripple-lib": "^0.17.9"
+  },
+  "devDependencies": {
+    "ilp-protocol-spsp": "github:sharafian/ilp-protocol-spsp"
   }
 }

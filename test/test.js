@@ -1,6 +1,7 @@
 const PluginOutgoingSettle = require('..')
 const PluginBtp = require('ilp-plugin-btp')
 const crypto = require('crypto')
+const SPSP = require('ilp-protocol-spsp')
 const IlpPacket = require('ilp-packet')
 
 class Store {
@@ -58,6 +59,12 @@ async function run () {
 
     await new Promise(resolve => setTimeout(resolve, 500))
   }
+
+  console.log('testing this SPSP thing')
+  await SPSP.pay(server, {
+    receiver: '$localhost:8089',
+    sourceAmount: '1001'
+  })
 
   console.log('settling')
   await new Promise(resolve => setTimeout(resolve, 65000))
