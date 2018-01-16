@@ -17,7 +17,7 @@ class ReversePlugin {
     })
 
     debug('injecting btp packet with ilp', data)
-    await this._parent._handleIncomingBtpPacket(this._parent._prefix + 'spsp.x', {
+    await this._parent._handleIncomingBtpPacket(this._parent._prefix + 'spsp.X', {
       type: BtpPacket.TYPE_MESSAGE,
       requestId,
       data: {

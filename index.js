@@ -11,6 +11,7 @@ const ReversePlugin = require('./src/reverse-plugin')
 const DEFAULT_SETTLE_THRESHOLD = 1000
 const FUNDING_AMOUNT = 25 * Math.pow(10, 6)
 const addressCodec = require('ripple-address-codec')
+const base32 = require('base32')
 const dropsToXrp = d => d.div(Math.pow(10, 6)).toString()
 
 const Koa = require('koa')
@@ -71,8 +72,20 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
     })
     this._spspRouter.get('/', async ctx => {
       const details = this._spspReceiver.generateAddressAndSecret()
+      const address = addressCodec
+        .encode(Buffer.from(
+          base32.decode(ctx.get('host').split('.')[1]),
+          'binary'))
+
+      const replacedDestination = details
+        .destinationAccount
+        .substring(0, (this._prefix + 'spsp.').length) + address + details
+        .destinationAccount
+        .substring((this._prefix + 'spsp.X').length)
+
+      debug('replaced spsp destination with', replacedDestination)
       ctx.body = {
-        destination_account: details.destinationAccount,
+        destination_account: replacedDestination,
         shared_secret: details.sharedSecret.toString('base64'),
         ledger_info: {
           asset_code: 'XRP',  
@@ -131,12 +144,18 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
       }
 
       let account
+      debug('paying to destination. destination=', destination)
       if (destination.startsWith(this._prefix + 'spsp.')) {
+        debug('starts with spsp sub-prefix. prefix=' + this._prefix + 'spsp.',
+          'destination=' + destination)
+
         const address = destination
           .substring((this._prefix + 'spsp.').length)
           .split('.')[0]
 
-        if (addressCodec.isValidAddress(address)) {
+        debug('parsed address. address=' + address)
+        if (!addressCodec.isValidAddress(address)) {
+          debug('address', address, 'is not valid')
           throw new Error('invalid destination. destination=' + destination +
             ' parsed_address=' + address)
         }

@@ -62,7 +62,7 @@ async function run () {
 
   console.log('testing this SPSP thing')
   await SPSP.pay(server, {
-    receiver: '$localhost:8089',
+    receiver: '$005c31p7ne7k25vfr9f7066nmwbttac9zntx7e11.localhost:8089',
     sourceAmount: '1001'
   })
 
