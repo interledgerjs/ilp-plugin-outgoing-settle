@@ -70,7 +70,7 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
       plugin: this._spspPlugin,
       paymentHandler: params => params.accept()
     })
-    this._spspRouter.get(['/', '/:address'], async ctx => {
+    this._spspRouter.get(['/', '/.well-known/pay', '/:address'], async ctx => {
       const details = this._spspReceiver.generateAddressAndSecret()
       const address = ctx.params.address || addressCodec
         .encode(Buffer.from(
@@ -92,7 +92,7 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
           asset_scale: 6
         },
         receiver_info: {
-          name: 'Siren Automatic XRP Receiver'
+          name: 'Siren receiver for "' + address + '"'
         }
       }
     })
