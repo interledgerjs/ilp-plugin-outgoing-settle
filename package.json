@@ -11,7 +11,7 @@
   "dependencies": {
     "base32": "0.0.6",
     "ilp-packet": "^2.1.2",
-    "ilp-plugin-mini-accounts": "https://github.com/interledgerjs/ilp-plugin-mini-accounts.git#bs-derive-multi-plugin",
+    "ilp-plugin-mini-accounts": "^3.1.0",
     "ilp-protocol-psk2": "^0.2.0",
     "koa": "^2.4.1",
     "koa-router": "^7.3.0",
