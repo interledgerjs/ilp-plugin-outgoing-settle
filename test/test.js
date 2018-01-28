@@ -18,6 +18,7 @@ const server = new PluginOutgoingSettle({
   secret: 'shmKxWVcvBDJwgCdxJUd2gb4tpwVc',
   address: 'rHQfnr3rS7EC7P9YdYm7zcMXtk9u48TCyB',
   _store: new Store(),
+  settleDelay: 20000,
   debugHostIldcpInfo: {
     clientAddress: 'test.settle',
     assetCode: 'XRP',
@@ -26,7 +27,7 @@ const server = new PluginOutgoingSettle({
 })
 
 const client = new PluginBtp({
-  server: 'btp+ws://:secret@localhost:8088/ry1b46gwycLccXWu42kqHmM36LWMMsYu8'
+  server: 'btp+ws://:secret@localhost:8088/ry1b46gwycLccXWu42kqHmM36LWMMsYu8/12345'
 })
 
 async function run () {
@@ -62,12 +63,32 @@ async function run () {
 
   console.log('testing this SPSP thing')
   await SPSP.pay(server, {
-    receiver: '$005c31p7ne7k25vfr9f7066nmwbttac9zntx7e11.localhost:8089',
+    receiver: 'http://005c31p7ne7k25vfr9f7066nmwbttac9zntx7e11.localhost:8089/.well-known/pay',
+    sourceAmount: '1001'
+  })
+
+  console.log('testing this SPSP thing with tag in domain')
+  await SPSP.pay(server, {
+    receiver: 'http://005c31p7ne7k25vfr9f7066nmwbttac9zntx7e11-12345.localhost:8089/.well-known/pay',
+    sourceAmount: '1001'
+  })
+
+  console.log('testing SPSP in path')
+  await SPSP.pay(server, {
+    receiver: 'http://localhost:8089/ry1b46gwycLccXWu42kqHmM36LWMMsYu8/12345',
+    sourceAmount: '1001'
+  })
+
+  await new Promise(resolve => setTimeout(resolve, 5000))
+
+  console.log('testing SPSP in path with no tag')
+  await SPSP.pay(server, {
+    receiver: 'http://localhost:8089/ry1b46gwycLccXWu42kqHmM36LWMMsYu8',
     sourceAmount: '1001'
   })
 
   console.log('settling')
-  await new Promise(resolve => setTimeout(resolve, 65000))
+  await new Promise(resolve => setTimeout(resolve, 30000))
   console.log('done')
 }
 

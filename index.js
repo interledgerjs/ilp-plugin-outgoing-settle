@@ -18,6 +18,13 @@ const Koa = require('koa')
 const Router = require('koa-router')
 const PSK2 = require('ilp-protocol-psk2')
 
+function validateDestinationTag (_tag) {
+  const tag = Number(_tag)
+  if (tag && (isNaN(tag) || tag > 4294967295 || tag < 0)) {
+    throw new Error('invalid destination tag')
+  }
+}
+
 class PluginOutgoingSettle extends PluginMiniAccounts {
   constructor (opts) {
     super(opts)
@@ -28,7 +35,7 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
     this._api = new RippleAPI({ server: this._xrpServer })
 
     this._settleThreshold = opts.settleThreshold || DEFAULT_SETTLE_THRESHOLD
-    this._settleDelay = 60 * 1000
+    this._settleDelay = opts.settleDelay || 60 * 1000
     this._store = new StoreWrapper(opts._store)
     this._accounts = new Map()
 
@@ -70,12 +77,23 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
       plugin: this._spspPlugin,
       paymentHandler: params => params.accept()
     })
-    this._spspRouter.get(['/', '/.well-known/pay', '/:address'], async ctx => {
+    this._spspRouter.get(['/', '/.well-known/pay', '/:address', '/:address/:tag'], async ctx => {
       const details = this._spspReceiver.generateAddressAndSecret()
-      const address = ctx.params.address || addressCodec
-        .encode(Buffer.from(
-          base32.decode(ctx.get('host').split('.')[0]),
-          'binary'))
+      const tag = ctx.params.tag && Number(ctx.params.tag)
+      validateDestinationTag(tag)
+
+      const subdomain = ctx.get('host').split('.')[0]
+      const addressSegment = subdomain.split('-')[0]
+      const tagSegment = subdomain.split('-')[1]
+      if (!ctx.params.address) {
+        validateDestinationTag(tagSegment)
+      }
+
+      const address = ctx.params.address
+        ? (ctx.params.address + (tag ? `~${tag}` : ''))
+        : addressCodec.encode(
+            Buffer.from(base32.decode(addressSegment), 'binary'))
+            + (tagSegment ? `~${tagSegment}` : '')
 
       const replacedDestination = details
         .destinationAccount
@@ -110,19 +128,23 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
     // This is to prevent anyone from stealing funds if an account is
     // compromised.
 
-    const addressInPath = req.url.substring(1)
-    const existingAddress = account.getXrpAddress()
+    const [ addressInPath, destinationTag ] = req.url.substring(1).split('/')
+    const [ existingAddress, existingTag ] = account.getXrpAddressAndTag().split('~')
+
+    validateDestinationTag(destinationTag)
 
     if (!addressCodec.isValidAddress(addressInPath)) {
       throw new Error('invalid XRP address in path. path="' + req.url + '"')
     } else if (existingAddress && existingAddress !== addressInPath) {
-      throw new Error(`XRP address is path does not match stored address. path="${req.url}" stored="${existingAddress}"`)
+      throw new Error(`XRP address in path does not match stored address. path="${req.url}" stored="${existingAddress}"`)
+    } else if (existingTag && existingTag !== destinationTag) {
+      throw new Error(`XRP dest tag in path does not match stored tag. path="${req.url}" stored="${existingTag}"`)
     } else {
       debug('setting xrp address. address=' + addressInPath)
-      await account.setXrpAddress(addressInPath)
+      await account.setXrpAddressAndTag(addressInPath + (destinationTag ? '~' + destinationTag : ''))
     }
 
-    debug('got xrp address. address=' + account.getXrpAddress(),
+    debug('got xrp address. address=' + account.getXrpAddressAndTag(),
       'account=' + account.getAccount())
   }
 
@@ -149,9 +171,12 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
         debug('starts with spsp sub-prefix. prefix=' + this._prefix + 'spsp.',
           'destination=' + destination)
 
-        const address = destination
+        const xrpAddressAndTag = destination
           .substring((this._prefix + 'spsp.').length)
           .split('.')[0]
+
+        const [ address, tag ] = xrpAddressAndTag.split('~')        
+        validateDestinationTag(tag)
 
         debug('parsed address. address=' + address)
         if (!addressCodec.isValidAddress(address)) {
@@ -161,7 +186,7 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
         }
 
         account = new Account({
-          address,
+          address: xrpAddressAndTag,
           store: this._store
         })
 
@@ -175,7 +200,7 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
       const balance = oldBalance.add(prepare.data.amount)
       account.setBalance(balance.toString())
 
-      debug(`updated balance. old=${oldBalance.toString()} new=${balance.toString()} address=${account.getXrpAddress()}`)
+      debug(`updated balance. old=${oldBalance.toString()} new=${balance.toString()} address=${account.getXrpAddressAndTag()}`)
 
       const threshold = account.addressExists()
         ? this._settleThreshold
@@ -185,7 +210,7 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
         // careful that this balance operation persists, because otherwise it
         // could trigger a double-settlement which is potentially dangerous
         account.setBalance('0')
-        const pending = this._pendingSettlements.get(account.getXrpAddress())
+        const pending = this._pendingSettlements.get(account.getXrpAddressAndTag())
         const settleAmount = pending
           ? balance.add(pending.settleAmount)
           : balance
@@ -196,12 +221,13 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
         // clear the settlement timer
         if (pending) {
           clearTimeout(pending.timeout)
-          this._pendingSettlements.delete(account.getXrpAddress())
+          this._pendingSettlements.delete(account.getXrpAddressAndTag())
         }
 
         const settleCallback = () => this._settle(account, settleAmount)
           .catch(e => debug('error during settlemnt.',
             'account=' + account.getAccount(),
+            'xrp=' + account.getXrpAddressAndTag(),
             'error=', e))
 
         // don't await, because we don't want the fulfill call to take a long
@@ -212,7 +238,7 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
         } else {
           // delay on small amounts so we don't repeat settlements
           debug('settling after timeout. timeout=' + this._settleDelay)
-          this._pendingSettlements.set(account.getXrpAddress(), {
+          this._pendingSettlements.set(account.getXrpAddressAndTag(), {
             settleAmount,
             timeout: setTimeout(settleCallback, this._settleDelay)
           })
@@ -230,10 +256,16 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
 
   async _settle (account, balance) {
     debug('sending settlement. account=', account.getAccount(),
+      'xrp=' + account.getXrpAddressAndTag(),
       'balance=', balance.toString())
 
     const value = dropsToXrp(balance)
-    const tx = await this._api.preparePayment(this._address, {
+    const [ address, tag ] = account.getXrpAddressAndTag().split('~')
+    debug('parsed address and tag. address=' + address,
+      'tag=' + tag)
+
+    validateDestinationTag(tag)
+    const paymentParams = {
       source: {
         address: this._address,
         maxAmount: {
@@ -242,26 +274,32 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
         }
       },
       destination: {
-        address: account.getXrpAddress(),
+        address,
         amount: {
           value,
           currency: 'XRP'
         }
       }
-    })
+    }
 
-    debug('signing settlement tx. account=', account.getAccount())
+    if (tag) paymentParams.destination.tag = Number(tag)
+    const tx = await this._api.preparePayment(this._address, paymentParams)
+
+    debug('signing settlement tx. account=', account.getAccount(),
+      'xrp=' + account.getXrpAddressAndTag())
     const signed = await this._api.sign(tx.txJSON, this._secret)
     const txHash = signed.id
     const result = new Promise((resolve, reject) => {
       this._submitted[txHash] = { resolve, reject }
     })
-     
-    debug('submitting settlement tx. account=', account.getAccount())
+
+    debug('submitting settlement tx. account=', account.getAccount(),
+      'xrp=' + account.getXrpAddressAndTag())
     await this._api.submit(signed.signedTransaction)
 
     await result
     debug('successfully settled . account=', account.getAccount(),
+      'xrp=' + account.getXrpAddressAndTag(),
       'balance=', balance.toString())
   }
 
@@ -269,6 +307,7 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
   _handleTransaction (ev) {
     if (ev.validated && ev.transaction && this._submitted[ev.transaction.hash]) {
       // give detailed error on failure
+      console.log('EVENT', ev)
       if (ev.engine_result !== 'tesSUCCESS') {
         this._submitted[ev.transaction.hash].reject(new Errors.NotAcceptedError('transaction with hash "' +
           ev.transaction.hash + '" failed with engine result: ' +

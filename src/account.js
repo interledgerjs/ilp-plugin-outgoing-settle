@@ -33,7 +33,7 @@ class Account {
     if (this._addressExists === undefined) {
       this._addressExists = false
       try {
-        await this._api.getAccountInfo(account.getXrpAddress())
+        await this._api.getAccountInfo(account.getXrpAddressAndTag().split('~')[0])
         this._addressExists = true
       } catch (e) {}
       this._store.setCache(EXISTS(address), this._addressExists)
@@ -52,13 +52,13 @@ class Account {
     this._store.set(this._balanceKey, balance)
   }
 
-  async setXrpAddress (address) {
+  async setXrpAddressAndTag (address) {
     this._store.set(XRP_ADDRESS(this._account), address)
     return this._loadAddress(address)
   }
 
-  getXrpAddress () {
-    return this._store.get(XRP_ADDRESS(this._account)) || this._address
+  getXrpAddressAndTag () {
+    return this._store.get(XRP_ADDRESS(this._account)) || this._address || ''
   }
 
   addressExists () {
