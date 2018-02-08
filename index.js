@@ -197,7 +197,7 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
 
       // TODO: is it possible that this account is unloaded?
       const oldBalance = account.getBalance()
-      const balance = oldBalance.add(prepare.data.amount)
+      const balance = oldBalance.plus(prepare.data.amount)
       account.setBalance(balance.toString())
 
       debug(`updated balance. old=${oldBalance.toString()} new=${balance.toString()} address=${account.getXrpAddressAndTag()}`)
@@ -206,13 +206,13 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
         ? this._settleThreshold
         : BigNumber.min(this._settleThreshold, FUNDING_AMOUNT)
 
-      if (balance.greaterThan(threshold)) {
+      if (balance.gt(threshold)) {
         // careful that this balance operation persists, because otherwise it
         // could trigger a double-settlement which is potentially dangerous
         account.setBalance('0')
         const pending = this._pendingSettlements.get(account.getXrpAddressAndTag())
         const settleAmount = pending
-          ? balance.add(pending.settleAmount)
+          ? balance.plus(pending.settleAmount)
           : balance
 
         debug('setting settleAmount. settleAmount=' + settleAmount.toString(),

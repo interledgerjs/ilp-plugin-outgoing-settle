@@ -10,6 +10,7 @@
   "license": "ISC",
   "dependencies": {
     "base32": "0.0.6",
+    "bignumber.js": "^6.0.0",
     "ilp-packet": "^2.1.2",
     "ilp-plugin-mini-accounts": "^3.2.1",
     "ilp-protocol-psk2": "^0.2.0",
