@@ -259,6 +259,9 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
       'xrp=' + account.getXrpAddressAndTag(),
       'balance=', balance.toString())
 
+    debug('cleaning up settlement amount')
+    this._pendingSettlements.delete(account.getXrpAddressAndTag())
+
     const value = dropsToXrp(balance)
     const [ address, tag ] = account.getXrpAddressAndTag().split('~')
     debug('parsed address and tag. address=' + address,
