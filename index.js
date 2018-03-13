@@ -12,7 +12,6 @@ const DEFAULT_SETTLE_THRESHOLD = 1000
 const FUNDING_AMOUNT = 25 * Math.pow(10, 6)
 const addressCodec = require('ripple-address-codec')
 const base32 = require('base32')
-const dropsToXrp = d => d.div(Math.pow(10, 6)).toString()
 
 const Koa = require('koa')
 const Router = require('koa-router')
@@ -34,6 +33,14 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
     this._xrpServer = opts.xrpServer
     this._api = new RippleAPI({ server: this._xrpServer })
 
+    if (typeof opts.currencyScale !== 'number' && opts.currencyScale !== undefined) {
+      throw new Error('opts.currencyScale must be a number if specified.' +
+        ' type=' + (typeof opts.currencyScale) +
+        ' value=' + opts.currencyScale)
+    }
+
+    this._currencyScale = (typeof opts.currencyScale === 'number') ? opts.currencyScale : 6
+
     this._settleThreshold = opts.settleThreshold || DEFAULT_SETTLE_THRESHOLD
     this._settleDelay = opts.settleDelay || 60 * 1000
     this._store = new StoreWrapper(opts._store)
@@ -46,6 +53,20 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
     this._spspServer = new Koa()
     this._spspRouter = Router()
     this._spspPort = opts.spspPort || 80
+  }
+
+  xrpToBase (amount) {
+    return new BigNumber(amount)
+      .times(Math.pow(10, this._currencyScale))
+      .toString()
+  }
+
+  baseToXrp (amount) {
+    // round down here, because we don't want to
+    // overpay users.
+    return new BigNumber(amount)
+      .div(Math.pow(10, this._currencyScale))
+      .toFixed(6, BigNumber.ROUND_DOWN)
   }
 
   _getAccount (from) {
@@ -107,7 +128,7 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
         shared_secret: details.sharedSecret.toString('base64'),
         ledger_info: {
           asset_code: 'XRP',  
-          asset_scale: 6
+          asset_scale: this._currencyScale
         },
         receiver_info: {
           name: 'Siren receiver for "' + address + '"'
@@ -200,7 +221,7 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
       const balance = oldBalance.plus(prepare.data.amount)
       account.setBalance(balance.toString())
 
-      debug(`updated balance. old=${oldBalance.toString()} new=${balance.toString()} address=${account.getXrpAddressAndTag()}`)
+      debug(`updated balance. old=${oldBalance.toString()} new=${balance.toString()} address=${account.getXrpAddressAndTag()} scale=${this._currencyScale}`)
 
       const threshold = account.addressExists()
         ? this._settleThreshold
@@ -216,7 +237,7 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
           : balance
 
         debug('setting settleAmount. settleAmount=' + settleAmount.toString(),
-          'balance=0 oldBalance=' + balance.toString())
+          'balance=0 oldBalance=' + balance.toString() + ' scale=' + this._currencyScale)
 
         // clear the settlement timer
         if (pending) {
@@ -257,12 +278,13 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
   async _settle (account, balance) {
     debug('sending settlement. account=', account.getAccount(),
       'xrp=' + account.getXrpAddressAndTag(),
-      'balance=', balance.toString())
+      'balance=', balance.toString(),
+      'scale=', this._currencyScale)
 
     debug('cleaning up settlement amount')
     this._pendingSettlements.delete(account.getXrpAddressAndTag())
 
-    const value = dropsToXrp(balance)
+    const value = this.baseToXrp(balance)
     const [ address, tag ] = account.getXrpAddressAndTag().split('~')
     debug('parsed address and tag. address=' + address,
       'tag=' + tag)
@@ -303,7 +325,8 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
     await result
     debug('successfully settled . account=', account.getAccount(),
       'xrp=' + account.getXrpAddressAndTag(),
-      'balance=', balance.toString())
+      'balance=', balance.toString(),
+      'scale=', this._currencyScale)
   }
 
   // from https://github.com/ripple/ilp-plugin-xrp-escrow/blob/master/src/plugin.js#L414
