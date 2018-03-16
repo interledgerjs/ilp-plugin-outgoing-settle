@@ -12,6 +12,7 @@ const DEFAULT_SETTLE_THRESHOLD = 1000
 const FUNDING_AMOUNT = 25 * Math.pow(10, 6)
 const addressCodec = require('ripple-address-codec')
 const base32 = require('base32')
+const { createSubmitter } = require('ilp-plugin-xrp-paychan-shared')
 
 const Koa = require('koa')
 const Router = require('koa-router')
@@ -32,6 +33,7 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
     this._address = opts.address // TODO: default to derived from secret
     this._xrpServer = opts.xrpServer
     this._api = new RippleAPI({ server: this._xrpServer })
+    this._txSubmitter = createSubmitter(this._api, this._address, this._secret)
 
     if (typeof opts.currencyScale !== 'number' && opts.currencyScale !== undefined) {
       throw new Error('opts.currencyScale must be a number if specified.' +
@@ -74,6 +76,7 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
     let account = this._accounts.get(accountName)
 
     if (!account) {
+      debug('creating account. account=', accountName)
       account = new Account({
         account: accountName,
         store: this._store,
@@ -206,6 +209,7 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
             ' parsed_address=' + address)
         }
 
+        debug('creating account. addressAndTag=', xrpAddressAndTag)
         account = new Account({
           address: xrpAddressAndTag,
           store: this._store
@@ -307,22 +311,17 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
       }
     }
 
-    if (tag) paymentParams.destination.tag = Number(tag)
-    const tx = await this._api.preparePayment(this._address, paymentParams)
-
-    debug('signing settlement tx. account=', account.getAccount(),
-      'xrp=' + account.getXrpAddressAndTag())
-    const signed = await this._api.sign(tx.txJSON, this._secret)
-    const txHash = signed.id
-    const result = new Promise((resolve, reject) => {
-      this._submitted[txHash] = { resolve, reject }
-    })
-
     debug('submitting settlement tx. account=', account.getAccount(),
       'xrp=' + account.getXrpAddressAndTag())
-    await this._api.submit(signed.signedTransaction)
 
-    await result
+    if (tag) paymentParams.destination.tag = Number(tag)
+    const { resultCode, resultMessage } = await this._txSubmitter('preparePayment', paymentParams)
+
+    if (resultCode !== 'tesSUCCESS') {
+      throw new Error('error submitting payment. result=' + resultMessage +
+        ' xrp=' + account.getXrpAddressAndTag())
+    }
+
     debug('successfully settled . account=', account.getAccount(),
       'xrp=' + account.getXrpAddressAndTag(),
       'balance=', balance.toString(),
