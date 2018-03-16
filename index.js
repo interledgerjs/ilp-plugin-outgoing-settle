@@ -74,7 +74,7 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
     let account = this._accounts.get(accountName)
 
     if (!account) {
-      account = new Account({ 
+      account = new Account({
         account: accountName,
         store: this._store,
         api: this._api
@@ -113,21 +113,21 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
       const address = ctx.params.address
         ? (ctx.params.address + (tag ? `~${tag}` : ''))
         : addressCodec.encode(
-            Buffer.from(base32.decode(addressSegment), 'binary'))
-            + (tagSegment ? `~${tagSegment}` : '')
+          Buffer.from(base32.decode(addressSegment), 'binary')) +
+          (tagSegment ? `~${tagSegment}` : '')
 
       const replacedDestination = details
         .destinationAccount
         .substring(0, (this._prefix + 'spsp.').length) + address + details
-        .destinationAccount
-        .substring((this._prefix + 'spsp.X').length)
+          .destinationAccount
+          .substring((this._prefix + 'spsp.X').length)
 
       debug('replaced spsp destination with', replacedDestination)
       ctx.body = {
         destination_account: replacedDestination,
         shared_secret: details.sharedSecret.toString('base64'),
         ledger_info: {
-          asset_code: 'XRP',  
+          asset_code: 'XRP',
           asset_scale: this._currencyScale
         },
         receiver_info: {
@@ -196,7 +196,7 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
           .substring((this._prefix + 'spsp.').length)
           .split('.')[0]
 
-        const [ address, tag ] = xrpAddressAndTag.split('~')        
+        const [ address, tag ] = xrpAddressAndTag.split('~')
         validateDestinationTag(tag)
 
         debug('parsed address. address=' + address)
@@ -255,7 +255,7 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
         // time and potentially drop the fulfillment while passing back.
         if (settleAmount.gt(FUNDING_AMOUNT)) {
           debug('settling immediately')
-          settleCallback() 
+          settleCallback()
         } else {
           // delay on small amounts so we don't repeat settlements
           debug('settling after timeout. timeout=' + this._settleDelay)
@@ -335,7 +335,7 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
       // give detailed error on failure
       console.log('EVENT', ev)
       if (ev.engine_result !== 'tesSUCCESS') {
-        this._submitted[ev.transaction.hash].reject(new Errors.NotAcceptedError('transaction with hash "' +
+        this._submitted[ev.transaction.hash].reject(new Error('transaction with hash "' +
           ev.transaction.hash + '" failed with engine result: ' +
           JSON.stringify(ev)))
       } else {
@@ -361,7 +361,7 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
       throw new Error('No clients connected for account ' + account)
     }
 
-    const results = Array.from(connections).map(wsIncoming => {
+    Array.from(connections).map(wsIncoming => {
       const result = new Promise(resolve => wsIncoming.send(BtpPacket.serialize(btpPacket), resolve))
 
       result.catch(err => {

@@ -4,7 +4,8 @@
   "description": "Outgoing-only plugin that sends XRP settlements.",
   "main": "index.js",
   "scripts": {
-    "test": "DEBUG=ilp* node ./test/test.js"
+    "test": "DEBUG=ilp* node ./test/test.js",
+    "lint": "eslint ."
   },
   "author": "",
   "license": "ISC",
@@ -19,6 +20,12 @@
     "ripple-lib": "^0.17.9"
   },
   "devDependencies": {
+    "eslint": "^4.18.2",
+    "eslint-config-standard": "^11.0.0",
+    "eslint-plugin-import": "^2.9.0",
+    "eslint-plugin-node": "^6.0.1",
+    "eslint-plugin-promise": "^3.7.0",
+    "eslint-plugin-standard": "^3.0.1",
     "ilp-protocol-spsp": "github:sharafian/ilp-protocol-spsp"
   }
 }
