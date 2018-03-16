@@ -33,7 +33,7 @@ class Account {
     if (this._addressExists === undefined) {
       this._addressExists = false
       try {
-        await this._api.getAccountInfo(account.getXrpAddressAndTag().split('~')[0])
+        await this._api.getAccountInfo(this.getXrpAddressAndTag().split('~')[0])
         this._addressExists = true
       } catch (e) {}
       this._store.setCache(EXISTS(address), this._addressExists)
