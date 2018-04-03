@@ -315,12 +315,7 @@ class PluginOutgoingSettle extends PluginMiniAccounts {
       'xrp=' + account.getXrpAddressAndTag())
 
     if (tag) paymentParams.destination.tag = Number(tag)
-    const { resultCode, resultMessage } = await this._txSubmitter('preparePayment', paymentParams)
-
-    if (resultCode !== 'tesSUCCESS') {
-      throw new Error('error submitting payment. result=' + resultMessage +
-        ' xrp=' + account.getXrpAddressAndTag())
-    }
+    await this._txSubmitter('preparePayment', paymentParams)
 
     debug('successfully settled . account=', account.getAccount(),
       'xrp=' + account.getXrpAddressAndTag(),
